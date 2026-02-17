@@ -18,6 +18,10 @@ public class PlanetData
     {
         modifiers = new List<PlanetModifier>();
     }
+    public Color[] GetColorPalette()
+    {
+        return PlanetColorPalette.GetColorsForType(planetType);
+    }
 }
 
 public enum PlanetType
@@ -27,12 +31,8 @@ public enum PlanetType
     Ocean,
     GasGiant,
     Arctic,
-    Tropical,
-    Savannah,
-    Alpine,
-    Tomb,
-    Machine,
-    Hive
+    Lava,
+    DryTerran
 }
 
 [Serializable]

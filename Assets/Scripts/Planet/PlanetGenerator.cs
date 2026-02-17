@@ -8,22 +8,42 @@ public class PlanetGenerator : MonoBehaviour
 
 
 
-    public List<PlanetData> GeneratePlanets(int starId, StarSpectralClass starClass)
+    // Update GeneratePlanets to accept empireId
+    public List<PlanetData> GeneratePlanets(int starId, StarSpectralClass starClass, int ownerEmpireID)
     {
-        int planetsPerStar = Random.Range(planetsPerStarmin, planetsPerStarmax); // Randomize per call
+        int planetsPerStar = Random.Range(planetsPerStarmin, planetsPerStarmax);
         var planets = new List<PlanetData>();
+        bool habitabilityOver90Spawned = false;
+
         for (int i = 0; i < planetsPerStar; i++)
         {
+            var planetType = GetRandomPlanetType(starClass);
+            int baseHabitability = PlanetColorPalette.GetDefaultHabitability(planetType);
+            int habitability = Mathf.Clamp(baseHabitability + Random.Range(-10, 11), 0, 100);
+
+            if (starId == 0 && !habitabilityOver90Spawned && i == planetsPerStar - 1)
+            {
+                habitability = Random.Range(99, 101);
+                habitabilityOver90Spawned = true;
+            }
+            else if (starId == 0 && habitability > 90)
+            {
+                habitabilityOver90Spawned = true;
+            }
+
             var planet = new PlanetData
             {
                 id = starId * 100 + i,
-                planetType = GetRandomPlanetType(starClass),
+                planetType = planetType,
                 size = Random.Range(30, 45),
-                habitability = Random.Range(30, 100),
+                habitability = habitability,
                 resources = GenerateResources(),
                 modifiers = GenerateModifiers(),
-                ownerEmpireID = null
+                ownerEmpireID = ownerEmpireID
             };
+
+            Color[] palette = planet.GetColorPalette();
+
             planets.Add(planet);
         }
         return planets;

@@ -10,7 +10,6 @@ public class CameraMovement : MonoBehaviour
     [SerializeField] private CinemachineCamera virtualCamera;
     [SerializeField] private CinemachineConfiner2D confiner;
 
-
     [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 20f;
     [SerializeField] private float fastMoveSpeed = 40f;
@@ -35,9 +34,14 @@ public class CameraMovement : MonoBehaviour
 
     public bool isActive = true;
 
+    // Store original target and zoom
+    private Transform originalTarget;
+    private float originalZoom;
+
+    bool isFollowingTarget = false;
+
     private void Awake()
     {
-
         if (Instance == null)
         {
             Instance = this;
@@ -74,6 +78,13 @@ public class CameraMovement : MonoBehaviour
         {
             virtualCamera.Follow = cameraTransform;
         }
+
+        // Store original target and zoom
+        originalTarget = cameraTransform;
+        if (virtualCamera != null)
+        {
+            originalZoom = virtualCamera.Lens.OrthographicSize;
+        }
     }
 
     private void OnEnable()
@@ -88,10 +99,7 @@ public class CameraMovement : MonoBehaviour
 
     void Start()
     {
-        // Set up Cinemachine virtual camera for 2D top-down
-
         Cursor.lockState = CursorLockMode.Confined;
-        
     }
 
     void Update()
@@ -99,12 +107,16 @@ public class CameraMovement : MonoBehaviour
         if (!isActive)
             return;
 
-        HandleKeyboardMovement();
-        HandleEdgeScrolling();
-        HandleMouseDrag();
+        if (!isFollowingTarget)
+        {
+            HandleKeyboardMovement();
+            HandleEdgeScrolling();
+            HandleMouseDrag();
+            
+        }
+
         HandleZoom();
 
-      //  CenterCameraTransform();
     }
 
     private void CenterCameraTransform()
@@ -112,13 +124,12 @@ public class CameraMovement : MonoBehaviour
         if (cam == null)
             return;
 
-        // For 2D orthographic, the camera's position is the center of the projection
         Vector3 camPos = cam.transform.position;
         cameraTransform.position = new Vector3(camPos.x, camPos.y, cameraTransform.position.z);
     }
+
     private void HandleKeyboardMovement()
     {
-        // WASD movement
         float horizontal = 0f;
         float vertical = 0f;
 
@@ -132,11 +143,12 @@ public class CameraMovement : MonoBehaviour
             horizontal = 1f;
 
         Vector3 moveDirection = new Vector3(horizontal, vertical, 0f).normalized;
-
-        // Sprint with Shift
         float currentSpeed = Keyboard.current.leftShiftKey.isPressed ? fastMoveSpeed : moveSpeed;
 
-        // Move camera rig in 2D space
+        // Scale speed based on zoom (orthographic size)
+        float zoomFactor = virtualCamera != null ? virtualCamera.Lens.OrthographicSize / minZoom : 1f;
+        currentSpeed *= zoomFactor;
+
         Vector3 newPosition = cameraTransform.position + moveDirection * currentSpeed * Time.unscaledDeltaTime;
         cameraTransform.position = ClampPositionToBounds(newPosition);
     }
@@ -149,7 +161,6 @@ public class CameraMovement : MonoBehaviour
         Vector3 edgeMove = Vector3.zero;
         Vector2 mousePosition = Mouse.current.position.ReadValue();
 
-        // Check screen edges
         if (mousePosition.x < edgeThreshold)
             edgeMove.x = -1f;
         else if (mousePosition.x > Screen.width - edgeThreshold)
@@ -162,7 +173,11 @@ public class CameraMovement : MonoBehaviour
 
         if (edgeMove != Vector3.zero)
         {
-            Vector3 newPosition = cameraTransform.position + edgeMove * edgeScrollSpeed * Time.unscaledDeltaTime;
+            // Scale edge scroll speed based on zoom (orthographic size)
+            float zoomFactor = virtualCamera != null ? virtualCamera.Lens.OrthographicSize / minZoom : 1f;
+            float scaledEdgeScrollSpeed = edgeScrollSpeed * zoomFactor;
+
+            Vector3 newPosition = cameraTransform.position + edgeMove * scaledEdgeScrollSpeed * Time.unscaledDeltaTime;
             cameraTransform.position = ClampPositionToBounds(newPosition);
         }
     }
@@ -172,7 +187,6 @@ public class CameraMovement : MonoBehaviour
         if (cam == null)
             return;
 
-        // Middle mouse button or right mouse button drag
         if (Mouse.current.middleButton.wasPressedThisFrame || Mouse.current.rightButton.wasPressedThisFrame)
         {
             isDragging = true;
@@ -184,7 +198,6 @@ public class CameraMovement : MonoBehaviour
             Vector3 currentMousePos = Mouse.current.position.ReadValue();
             Vector3 mouseDelta = currentMousePos - lastMousePosition;
 
-            // Convert screen space delta to world space movement
             float worldDeltaX = -mouseDelta.x * dragSpeed * virtualCamera.Lens.OrthographicSize / Screen.height;
             float worldDeltaY = -mouseDelta.y * dragSpeed * virtualCamera.Lens.OrthographicSize / Screen.height;
 
@@ -211,19 +224,56 @@ public class CameraMovement : MonoBehaviour
         {
             float newSize = virtualCamera.Lens.OrthographicSize - scroll * zoomSpeed * Time.unscaledDeltaTime;
             virtualCamera.Lens.OrthographicSize = Mathf.Clamp(newSize, minZoom, maxZoom);
+           
         }
     }
 
     private Vector3 ClampPositionToBounds(Vector3 position)
     {
-        // If no bounding shape is set, return the position unchanged
         if (boundingShape == null)
             return position;
 
-        // Get the closest point on the collider to the desired position
         Vector2 clampedPosition2D = boundingShape.ClosestPoint(position);
-
-        // Return the clamped position with the original Z coordinate
         return new Vector3(clampedPosition2D.x, clampedPosition2D.y, position.z);
+    }
+
+    public void ZoomAndFollow(Transform target)
+    {
+        if (virtualCamera == null)
+            return;
+
+        isFollowingTarget = true;
+
+        virtualCamera.Follow = target;
+        float targetZoom = minZoom;
+        StopAllCoroutines();
+        StartCoroutine(SmoothZoom(targetZoom));
+    }
+
+    public void ReturnToOriginalTarget()
+    {
+        if (virtualCamera == null || originalTarget == null)
+            return;
+
+        isFollowingTarget = false;
+
+        virtualCamera.Follow = originalTarget;
+        StopAllCoroutines();
+        StartCoroutine(SmoothZoom(originalZoom));
+    }
+
+    private System.Collections.IEnumerator SmoothZoom(float targetZoom)
+    {
+        float duration = 0.5f;
+        float startZoom = virtualCamera.Lens.OrthographicSize;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            virtualCamera.Lens.OrthographicSize = Mathf.Lerp(startZoom, targetZoom, elapsed / duration);
+            yield return null;
+        }
+        virtualCamera.Lens.OrthographicSize = targetZoom;
     }
 }
