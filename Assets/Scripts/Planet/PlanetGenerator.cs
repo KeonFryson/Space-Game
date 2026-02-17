@@ -3,10 +3,14 @@ using UnityEngine;
 
 public class PlanetGenerator : MonoBehaviour
 {
-    public int planetsPerStar = 5;
+    public int planetsPerStarmin = 1;
+    public int planetsPerStarmax = 5;
+
+
 
     public List<PlanetData> GeneratePlanets(int starId, StarSpectralClass starClass)
     {
+        int planetsPerStar = Random.Range(planetsPerStarmin, planetsPerStarmax); // Randomize per call
         var planets = new List<PlanetData>();
         for (int i = 0; i < planetsPerStar; i++)
         {
@@ -14,7 +18,7 @@ public class PlanetGenerator : MonoBehaviour
             {
                 id = starId * 100 + i,
                 planetType = GetRandomPlanetType(starClass),
-                size = Random.Range(10, 25),
+                size = Random.Range(30, 45),
                 habitability = Random.Range(30, 100),
                 resources = GenerateResources(),
                 modifiers = GenerateModifiers(),
