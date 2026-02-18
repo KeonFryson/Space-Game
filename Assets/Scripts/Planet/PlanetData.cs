@@ -34,13 +34,17 @@ public enum PlanetType
     Lava,
     DryTerran
 }
-
-[Serializable]
+ 
 public class ResourceOutput
 {
     public int energy;
     public int minerals;
     public int food;
+
+    public override string ToString()
+    {
+        return $"Energy: {energy}, Minerals: {minerals}, Food: {food}";
+    }
 }
 
 public enum PlanetModifier

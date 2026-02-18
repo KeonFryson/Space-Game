@@ -181,6 +181,49 @@ public class GalaxyGenerator
         return starPlanets;
     }
 
+    // Add this method to the GalaxyGenerator class
+
+    public static List<AsteroidData> GenerateAsteroids(
+        int numAsteroids,
+        Vector2 galaxySize,
+        List<StarData> stars,
+        float minDistanceFromStars = 300f)
+    {
+        var asteroids = new List<AsteroidData>();
+        float leftBound = -galaxySize.x / 2;
+        float rightBound = galaxySize.x / 2;
+        float bottomBound = -galaxySize.y / 2;
+        float topBound = galaxySize.y / 2;
+
+        for (int i = 0; i < numAsteroids; i++)
+        {
+            Vector2 position;
+            int attempts = 0;
+            const int maxAttempts = 100;
+            do
+            {
+                position = new Vector2(
+                    Random.Range(leftBound + 20f, rightBound - 20f),
+                    Random.Range(bottomBound + 20f, topBound - 20f)
+                );
+                attempts++;
+            }
+            while (IsTooCloseToOtherStars(position, minDistanceFromStars, stars) && attempts < maxAttempts);
+
+            var asteroid = new AsteroidData
+            {
+                id = i,
+                name = GenerateRandomName(2, 2) + "-Ast",
+                position = position,
+                size = Random.Range(20f, 100f)
+            };
+            asteroids.Add(asteroid);
+        }
+        return asteroids;
+    }
+
+
+
     private static bool IsTooCloseToOtherStars(Vector2 position, float minDistance, List<StarData> stars)
     {
         foreach (var star in stars)

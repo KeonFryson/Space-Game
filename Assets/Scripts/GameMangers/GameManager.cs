@@ -17,10 +17,21 @@ public class GameManager : MonoBehaviour
 
     [SerializeField] private GameObject starPrefab;
     [SerializeField] private GameObject planetPrefab;
-
+    [SerializeField] private GameObject[] asteroidPrefab;
+    [SerializeField] private GameObject shipPrefab;
     private const int NumEmpires = 3;
-    private static readonly string[] empireNames = { "Player", "Enemy1", "Enemy2" };
+    public static readonly string[] empireNames = { "Player", "Enemy1", "Enemy2" };
     private Dictionary<int, int> starEmpireOwnership = new Dictionary<int, int>();
+    private List<AsteroidData> asteroids = new List<AsteroidData>();
+    [SerializeField] private int numAsteroids = 30; // You can adjust this number as needed
+    private List<ShipController> playerShips = new List<ShipController>();
+
+    // Reference to PlayerButtonInput for selection box integration
+    [SerializeField] private PlayerButtonInput playerButtonInput;
+
+    [Header("Ship Generation")]
+    [SerializeField] private int numPlayerShips = 3;
+    [SerializeField] private float minShipDistance = 1f;
 
     private static readonly Color[] empireColors = new[]
     {
@@ -42,13 +53,69 @@ public class GameManager : MonoBehaviour
             Destroy(gameObject);
             return;
         }
+
+        // Find PlayerButtonInput if not assigned
+        if (playerButtonInput == null)
+            playerButtonInput = FindFirstObjectByType<PlayerButtonInput>();
     }
 
     void Start()
     {
         stars = GalaxyGenerator.GenerateStars(numStars, galaxySize, NumEmpires, starEmpireOwnership, empireNames);
         starPlanets = GalaxyGenerator.GeneratePlanetsForStars(stars, starEmpireOwnership, planetGenerator);
+        asteroids = GalaxyGenerator.GenerateAsteroids(numAsteroids, galaxySize, stars);
+
+        SpawnPlayerShips();
         VisualizeGalaxy();
+    }
+
+    private void SpawnPlayerShips()
+    {
+        playerShips.Clear();
+        if (playerButtonInput != null)
+            playerButtonInput.allShips.Clear();
+
+        float spawnRadius = 10f; // Ships will spawn within 10 units of (0,0)
+        for (int i = 0; i < numPlayerShips; i++)
+        {
+            Vector2 spawnPos;
+            int attempts = 0;
+            const int maxAttempts = 100;
+            do
+            {
+                float angle = Random.Range(0f, Mathf.PI * 2f);
+                float radius = Random.Range(0f, spawnRadius);
+                spawnPos = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+                attempts++;
+            }
+            while (IsTooCloseToOtherShips(spawnPos, minShipDistance, playerShips) && attempts < maxAttempts);
+
+            var shipData = new ShipData
+            {
+                id = i,
+                name = $"PlayerShip_{i}",
+                position = spawnPos,
+                ownerEmpireId = 0
+            };
+            var shipGO = Instantiate(shipPrefab, spawnPos, Quaternion.identity);
+            var shipController = shipGO.GetComponent<ShipController>();
+            shipController.Data = shipData;
+            playerShips.Add(shipController);
+
+            // Add to PlayerButtonInput's allShips list for selection box
+            if (playerButtonInput != null)
+                playerButtonInput.allShips.Add(shipController);
+        }
+    }
+
+    private bool IsTooCloseToOtherShips(Vector2 position, float minDistance, List<ShipController> ships)
+    {
+        foreach (var ship in ships)
+        {
+            if (Vector2.Distance(position, (Vector2)ship.transform.position) < minDistance)
+                return true;
+        }
+        return false;
     }
 
     private void DebugStarOwnership()
@@ -71,11 +138,19 @@ public class GameManager : MonoBehaviour
             GameObject systemGO = new GameObject($"StarSystem_{star.id}_{star.name}");
             systemGO.transform.position = star.position;
 
+            // Instantiate star and assign data
             var starGO = Instantiate(starPrefab, star.position, Quaternion.identity, systemGO.transform);
             starGO.name = star.name;
             var sr = starGO.GetComponent<SpriteRenderer>();
             if (sr != null)
                 sr.color = star.color;
+
+            // Assign StarData to StarDataComponent
+            var starDataComponent = starGO.GetComponent<StarDataComponent>();
+            if (starDataComponent != null)
+            {
+                starDataComponent.Data = star;
+            }
 
             if (starPlanets.TryGetValue(star.id, out var planets))
             {
@@ -113,8 +188,30 @@ public class GameManager : MonoBehaviour
                     orbit.orbitRadius = orbitRadius + i * orbitStep;
                     orbit.orbitSpeed = Random.Range(10f, 30f) / (1f + i);
                     orbit.orbitAngle = angle;
+
+                    // Assign PlanetData to PlanetDataComponent
+                    var planetDataComponent = planetGO.GetComponent<PlanetDataComponent>();
+                    if (planetDataComponent != null)
+                    {
+                        planetDataComponent.Data = planets[i];
+                    }
                 }
             }
+        }
+
+        // --- Asteroids under a parent ---
+        GameObject asteroidsParent = new GameObject("Asteroids");
+        foreach (var asteroid in asteroids)
+        {
+            GameObject asteroidRand = asteroidPrefab.Length > 0 ? asteroidPrefab[Random.Range(0, asteroidPrefab.Length)] : null;
+            var asteroidGO = Instantiate(asteroidRand, asteroid.position, Quaternion.identity, asteroidsParent.transform);
+            asteroidGO.name = asteroid.name;
+
+            // Optionally set size and color
+            asteroidGO.transform.localScale = Vector3.one * (asteroid.size * 0.01f);
+            var asteroidsr = asteroidGO.GetComponent<SpriteRenderer>();
+            if (asteroidsr != null)
+                asteroidsr.color = Color.white;
         }
     }
 

@@ -259,7 +259,7 @@ public class CameraMovement : MonoBehaviour
 
         virtualCamera.Follow = originalTarget;
         StopAllCoroutines();
-        StartCoroutine(SmoothZoom(originalZoom));
+        //StartCoroutine(SmoothZoom(originalZoom));
     }
 
     private System.Collections.IEnumerator SmoothZoom(float targetZoom)
